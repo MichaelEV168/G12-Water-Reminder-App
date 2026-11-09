@@ -1,2 +1,2 @@
 # G12-Water-Reminder-App
-group project app that remind you to drink water
+Our group has completed the initial design of the Water Reminder App and developed a basic working version using HTML, CSS, and JavaScript. The current implementation includes water intake tracking, a daily hydration goal, progress visualization, and hourly reminders. We are currently organizing our source code and preparing the project for GitHub submission. Our main obstacle is that our group is unfamiliar with Flutter development, and we have encountered difficulties setting up the required development environment. We would appreciate guidance on how to proceed with the Flutter requirements or whether our current web-based implementation can be accepted as an alternative.
