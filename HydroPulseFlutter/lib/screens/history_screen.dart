@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/hydration_log.dart';
 import '../state/hydration_state.dart';
@@ -120,10 +121,137 @@ class HistoryScreen extends StatelessWidget {
         else
           ...state.todayLogs.map((log) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _LogTile(log: log),
+                child: _LogTile(
+                  log: log,
+                  onEdit: () => _editLog(context, log),
+                  onDelete: () => _deleteLog(context, log),
+                ),
               )),
       ],
     );
+  }
+
+  Future<void> _editLog(BuildContext context, HydrationLog log) async {
+    final amountController = TextEditingController(text: '${log.amount}');
+    var selectedTime = TimeOfDay.fromDateTime(log.time);
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Intake Log'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: selectedTime,
+                  );
+                  if (picked != null) {
+                    setDialogState(() => selectedTime = picked);
+                  }
+                },
+                icon: const Icon(Icons.access_time),
+                label: Text(selectedTime.format(context)),
+              ),
+              const SizedBox(height: 12),
+              const Text('Amount (ml)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(signed: true),
+                inputFormatters: [
+                  TextInputFormatter.withFunction((oldValue, newValue) {
+                    return RegExp(r'^-?\d*$').hasMatch(newValue.text)
+                        ? newValue
+                        : oldValue;
+                  }),
+                ],
+                decoration: const InputDecoration(
+                  suffixText: 'ml',
+                  border: OutlineInputBorder(),
+                  helperText: 'Use a negative amount for a correction.',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final editedAmount = int.tryParse(amountController.text.trim());
+                if (editedAmount == null || editedAmount == 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enter a non-zero amount.')),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, editedAmount);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    amountController.dispose();
+
+    if (amount == null) return;
+    final updatedTime = DateTime(
+      log.time.year,
+      log.time.month,
+      log.time.day,
+      selectedTime.hour,
+      selectedTime.minute,
+    );
+    if (!state.updateLog(log.id, time: updatedTime, amount: amount)) {
+      _showMessage(context, 'The updated amount cannot reduce intake below 0 ml.', isError: true);
+      return;
+    }
+    _showMessage(context, 'Intake log updated');
+  }
+
+  Future<void> _deleteLog(BuildContext context, HydrationLog log) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete intake log?'),
+        content: const Text("This will update today's hydration total."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    if (state.deleteLog(log.id)) {
+      _showMessage(context, 'Intake log deleted');
+    }
+  }
+
+  void _showMessage(BuildContext context, String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : null,
+        behavior: SnackBarBehavior.floating,
+      ));
   }
 }
 
@@ -178,9 +306,15 @@ class _WeeklyBars extends StatelessWidget {
 }
 
 class _LogTile extends StatelessWidget {
-  const _LogTile({required this.log});
+  const _LogTile({
+    required this.log,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final HydrationLog log;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -207,6 +341,20 @@ class _LogTile extends StatelessWidget {
               ),
             ),
             Text('${positive ? '+' : ''}${log.amount} ml', style: TextStyle(fontWeight: FontWeight.w800, color: positive ? Theme.of(context).colorScheme.primary : Colors.red)),
+            const SizedBox(width: 4),
+            IconButton(
+              onPressed: onEdit,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              tooltip: 'Edit intake log',
+            ),
+            IconButton(
+              onPressed: onDelete,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.delete_outline, size: 18),
+              color: Colors.red,
+              tooltip: 'Delete intake log',
+            ),
           ],
         ),
       ),
