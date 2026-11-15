@@ -1,3 +1,4 @@
+
 class HydrationLog {
   const HydrationLog({
     required this.id,
@@ -8,4 +9,15 @@ class HydrationLog {
   final int id;
   final DateTime time;
   final int amount;
+
+  HydrationLog copyWith({
+    DateTime? time,
+    int? amount,
+  }) {
+    return HydrationLog(
+      id: id,
+      time: time ?? this.time,
+      amount: amount ?? this.amount,
+    );
+  }
 }
